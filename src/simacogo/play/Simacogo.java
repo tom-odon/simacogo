@@ -26,12 +26,28 @@ public class Simacogo {
 		Minimax minimax = new Minimax();
 		Scanner scanner = new Scanner(System.in);
 		boolean humanMove = true;
-			
+		boolean ABPrune = false;
+		boolean playerWillLose = false;
+		
+		//Grab some basic input from user.
 		System.out.println("Let's play Simacogo!");
-		System.out.println("Choose a ply: (0 - 10)");
+		System.out.println("Choose a ply: (1 - 10)");
 		String plyInput = scanner.next();
 		ply = tryParse(plyInput);
-
+		
+		System.out.println("Use alpha beta pruning? y / n");
+		String answer = scanner.next();
+		if(answer.equals("y") || answer.equals("Y")){
+			ABPrune = true;
+		}
+		
+		System.out.println("Do you want to lose? y / n");
+		answer = scanner.next();
+		if(answer.equals("y") || answer.equals("Y")){
+			playerWillLose = true;
+		}
+		
+		
 		Node current = initialNode;
 		
 		//if the game hasn't reached terminal state...
@@ -77,14 +93,16 @@ public class Simacogo {
 				
 				humanMove = false;
 			
+				
 			} else {
 				//Prompt computer for move
 				System.out.println("It's the computer's move! It's thinking...\n");
 				long startTime = System.currentTimeMillis();
-				int x = minimax.decide(current, ply);
+				int x = minimax.decide(current, ply, ABPrune, playerWillLose);
 				System.out.println("The computer chose slot " + (x + 1));
 				long endTime = System.currentTimeMillis();
 				System.out.println("Decision took " + (endTime - startTime) + " ms");
+				
 				//Convert move into Action and Node, update game state.
 				Action action = tryAction(x, current, false);
 				nextMove = new Node(current.getXScore(), current.getOScore(), 
@@ -104,7 +122,16 @@ public class Simacogo {
 			current = nextMove;
 		}
 		
-		//end the game
+		//end the game when it's terminated
+		printBoard(current);
+		printScore(current);
+		System.out.println("GAME OVER!");
+		if (current.getXScore() > current.getOScore())
+			System.out.println("X wins!");
+		else if(current.getXScore() > current.getOScore())
+			System.out.println("O wins!");
+		else
+			System.out.println("It's a tie!");
 		scanner.close();
 	}
 	
@@ -112,12 +139,17 @@ public class Simacogo {
 	 * Copy the state of the board for creating a new node.
 	 */
 	private char[][] copyState(char[][] state) {
-		char [][] newState = new char[state.length][];
+		char [][] newState = new char[BOARD_SIZE][];
 		for(int i = 0; i < state.length; i++)
 		    newState[i] = state[i].clone();
 		return newState;
 	}
+	
 
+	/*
+	 * Makes sure an action taken by the player will fit on the board, throws
+	 * an exception if it isn't.
+	 */
 	private Action tryAction(int rawMove, Node nextMove, boolean humanPlayer) {
 		//TODO: check that move is valid
 			//if not, press for another move
@@ -144,7 +176,10 @@ public class Simacogo {
 			action = new Action(x, rawMove, 'O');
 		return action;
 	}
-
+	
+	/*
+	 * Checks that human input is between the column size of 1 and 9.
+	 */
 	private int validateMove(int rawMove) {
 		//TODO: also check for closed-off columns
 		if(rawMove > 0 && rawMove < 10)
@@ -152,17 +187,20 @@ public class Simacogo {
 		else return - 1;
 	}
 
+	//Print the board
 	public void printBoard(Node node){
 		System.out.println("\nThe current board looks like this: \n");
 		node.printBoard();
 	}
 	
+	//Print the score
 	public void printScore(Node node){
 		System.out.println("\nThe current score is: ");
 		System.out.println("X : " + node.getXScore());  
 		System.out.println("O : " + node.getOScore() + "\n");
 	}
 	
+	//Try parsing the human input for a number to make a move off of.
 	public Integer tryParse(String text) {
 		try {
 			return Integer.parseInt(text);

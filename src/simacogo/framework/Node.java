@@ -7,32 +7,38 @@ import java.util.List;
  * Represents a move in the Simacogo game. Consists of a 2D 9x9 board, an action,
  * and a point cost for Min and Max. Keeps links to parent so that a tree can be 
  * returned with the best possible score.
+ * 
+ * POSSIBLE IMPROVEMENT: Store data in bytes instead of chars and ints. 
  */
+
 public class Node {
 	
-	//could place this int in an enum
+	//could place this int in an enum?
 	private static final int BOARD_SIZE = 9;
-	private Node parent;
 	private char[][] state;
 	private Action action;
 	private int	xScore;
 	private int oScore;
 	private int minMaxVal;
+	private int alphaVal;
+	private int betaVal;
+	private List<Node> children;
 	
 	/*
 	 * Class constructor which is generated from a parent node.
 	 */
-	public Node(Node parent, int xScore, int oScore, Action action, 
-			char[][]state, int pointsToAdd) {
-		this.parent = parent;
+	public Node(int xScore, int oScore, Action action, 
+				char[][]state, int pointsToAdd) {
 		this.action = action;
 		this.xScore = xScore;
 		this.oScore = oScore;
 		this.state = state;
-		if(this.action.playerIsX)
-			xScore += pointsToAdd;
-		else
-			oScore += pointsToAdd; 
+		if(this.action.playerIsX){
+			this.xScore += pointsToAdd;
+		}
+		else{
+			this.oScore += pointsToAdd; 
+		}
 	}
 	
 	/*
@@ -52,7 +58,6 @@ public class Node {
 		}
 		this.xScore = 0;
 		this.oScore = 0;
-		this.parent = null;
 		this.action = new Action(0,0,'X');
 	}
 	
@@ -86,6 +91,7 @@ public class Node {
 		System.out.println('\n');
 	}
 	
+	
 	//Getters and setters for state of board.
 	public char[][] getState(){
 		return state;
@@ -98,6 +104,7 @@ public class Node {
 			this.state = board;
 	}
 	
+	
 	/*
 	 * Getters and setters for scores.
 	 */
@@ -108,6 +115,7 @@ public class Node {
 	public int getOScore() {
 		return this.oScore;
 	}
+	
 	
 	/*
 	 * Getters and setters for Action
@@ -120,52 +128,72 @@ public class Node {
 		this.action = action;
 	}
 	
+	
 	/*
 	 * Figure out which successor moves are possible given the configuration. 
 	 * Create actions and return a list to be added to the stack for Minimax.
-	 */
+	 */	
 	public List<Node> getChildren() {
-		char next;
-		
-		//Find the 9(or less) possible board moves.
-
-List<Node> children = new LinkedList<Node>();
-		int x, y;
-		outerloop:
-		for (y = 0; y < BOARD_SIZE; y++){
-			x = 0;
-			while (x < BOARD_SIZE ) {
-				//there is no room in the column
-				if (x == 0 && state[x][y] != '\u00B7'){
-					continue outerloop;
-				}
-				//the current tile is unoccupied
-				if (( state[x][y] == '\u00B7') && (x < BOARD_SIZE - 1))
-					x++;
-				else {
-					if(this.action.playerIsX) 
-						 next = 'O';
-					else next = 'X';
-					int pointsToAdd = movePoints(x, y, next);
-					Action nextMove = new Action(x, y, next);
-					char[][] newState = copyStateAndAddMove(nextMove);
-					children.add(new Node(this, this.xScore, this.oScore, nextMove, newState, pointsToAdd));
-					break;
-				}	
-			}
+		this.children = new LinkedList<Node>();		
+		for (int y = 0; y < BOARD_SIZE; y++){
+			tryXColumnChild(y);
 		}
-		return children;
+		return this.children;
 	}
 	
-	//TODO: make public?
+	/*
+	 * Called by getChildren, traverses down a column to see if a child
+	 * can be created. If one can be created, calls makeChild to add to 
+	 * the list of children.
+	 */
+	public void tryXColumnChild(int y){
+		for(int x = 0; x < BOARD_SIZE; x++){
+			//no room in column
+			if(x == 0 && state[x][y] != '\u00B7')
+				return;
+			//last tile in the column
+			if(x == BOARD_SIZE - 1 && state[x][y] == '\u00B7'){
+				makeChild(x, y);
+				return;
+			}
+			//next tile is occupied but current is not
+			if(state[x + 1][y] != '\u00B7' && state[x][y] == '\u00B7'){
+				makeChild(x, y);
+				return;
+			}
+		}
+	}
+	
+	/*
+	 * Creates a child node and stores in the children list
+	 */
+	public void makeChild(int x, int y) {
+		char next;
+		if(this.action.playerIsX) 
+			next = 'O';
+		else next = 'X';
+		int pointsToAdd = movePoints(x, y, next);
+		Action nextMove = new Action(x, y, next);
+		char[][] newState = copyStateAndAddMove(nextMove);
+		
+		
+		Node newNode = new Node(this.xScore, this.oScore, nextMove, newState, pointsToAdd);
+		this.children.add(newNode);
+	}
+
+
 	//Copies the state of the tiles for new Node creation
 	public char[][] copyStateAndAddMove(Action move){
 		int x = move.getxCoord();
 		int y = move.getyCoord();
-		char [][] newState = new char[state.length][];
-		for(int i = 0; i < state.length; i++)
-		    newState[i] = state[i].clone();	
-		newState[x][y] = move.playerIsX? 'X' : 'O';
+		char [][] newState = new char[BOARD_SIZE][BOARD_SIZE];
+		for(int i = 0; i < BOARD_SIZE; i++)
+		    System.arraycopy(this.state[i], 0, newState[i], 0, BOARD_SIZE);
+		if(move.playerIsX)
+			newState[x][y] = 'X';
+		else
+			newState[x][y] = 'O';
+
 		return newState;
 	}
 	
@@ -179,27 +207,28 @@ List<Node> children = new LinkedList<Node>();
 		
 		//2 pts calculation, looks Up, Down, Left, and Right
 		if (x > 0) 
-			if (state[x - 1][y] == marker) score += 2;
+			if (state[x - 1][y] == marker) score += 2; 
 		if (x < BOARD_SIZE - 1)
-			if (state[x + 1][y] == marker) score += 2;
+			if (state[x + 1][y] == marker) score += 2; 
 		if (y > 0)
-			if (state[x][y - 1] == marker) score += 2;
+			if (state[x][y - 1] == marker) score += 2; 
 		if (y < BOARD_SIZE - 1)
-			if (state[x][y + 1] == marker) score += 2;
+			if (state[x][y + 1] == marker) score += 2; 
 		
 		//1 pts calculation, looks NW, NE, SE, SW
 		if (x > 0 && y > 0) 
-			if (state[x - 1][y - 1] == marker) score += 1;
+			if (state[x - 1][y - 1] == marker) score += 1; 
 		if (x > 0 && y < BOARD_SIZE - 1)
-			if (state[x - 1][y + 1] == marker) score += 1;
+			if (state[x - 1][y + 1] == marker) score += 1; 
 		if (x < BOARD_SIZE - 1 && y < BOARD_SIZE - 1)
-			if (state[x + 1][y + 1] == marker) score += 1;
-		if (x > BOARD_SIZE - 1 && y > 0)
-			if (state[x + 1][y - 1] == marker) score += 1;
+			if (state[x + 1][y + 1] == marker) score += 1; 
+		if (x < BOARD_SIZE - 1 && y > 0)
+			if (state[x + 1][y - 1] == marker) score += 1; 
 		
 		return score;
 	}
 	
+	//Increment x and o scores by the indicated amount.
 	public void raiseXScore(int movePoints) {
 		this.xScore += movePoints;	
 	}
@@ -207,25 +236,11 @@ List<Node> children = new LinkedList<Node>();
 	public void raiseOScore(int movePoints) {
 		this.oScore += movePoints;		
 	}
-
+	
 	
 	/*
-	 * Strictly for unit testing project.
+	 * Getters and setters for more private variables.
 	 */
-	public static void main(String[] args) {
-		Node node = new Node();
-		node.printBoard();
-		List<Node> children = node.getChildren();
-		for(Node child : children)
-			child.printBoard();
-		
-		Node firstChild = children.get(0);
-		
-		children = firstChild.getChildren();
-		for(Node child : children)
-			child.printBoard();
-	}
-
 	public int getMinMaxVal() {
 		return minMaxVal;
 	}
@@ -234,9 +249,55 @@ List<Node> children = new LinkedList<Node>();
 		this.minMaxVal = minMaxVal;
 	}
 
+	public int getAlphaVal() {
+		return alphaVal;
+	}
+
+	public void setAlphaVal(int alphaVal) {
+		this.alphaVal = alphaVal;
+	}
+
+	public int getBetaVal() {
+		return betaVal;
+	}
+
+	public void setBetaVal(int betaVal) {
+		this.betaVal = betaVal;
+	}
+	//END GETTERS & SETTERS.
 
 	
-
-
-
+	/*
+	 * Strictly for unit testing project.
+	 */
+	public static void main(String[] args) throws Exception {
+		Node node = new Node();
+		
+		node.printBoard();
+		
+		List<Node> children = node.getChildren();
+		
+		for(Node child : children){
+			child.printBoard();
+			System.out.println(child.getAction().toString());
+			System.out.println("Xscore : " + child.getXScore() + " Oscore : " + child.getOScore() + "\n");
+		}
+		node = children.get(0);
+		
+		int depth = 4;
+		while(depth > -1){
+			children = node.getChildren();
+			
+			for(Node child : children){
+				child.printBoard();
+				System.out.println(child.getAction().toString());
+				System.out.println("Xscore : " + child.getXScore() + " Oscore : " + child.getOScore() + "\n");
+			}
+			
+			node = children.get(0);
+			
+			depth--;
+		}
+			
+	}
 }
